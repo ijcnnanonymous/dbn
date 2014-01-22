@@ -1,6 +1,18 @@
 % Hardware Simulator for
 % Ristricted Boltzmann Machine in Neuron Machine Hardware Architecture
-% Code provided by Jerry B. Ahn
+% Version 1.000
+% Code provided by IJCNN_Anonymous (to be changed), Jan.2014
+%
+% Permission is granted for anyone to copy, use, modify, or distribute this
+% program and accompanying programs and documents for any purpose, provided
+% this copyright notice is retained and prominently displayed, along with
+% a note saying that the original programs are available from our 
+% web page. 
+% The programs and documents are distributed without any warranty, express or
+% implied.  As the programs were written for research purposes only, they have
+% not been tested to the degree that would be advisable in any important
+% application.  All use of these programs is entirely at the user's own risk.
+% 
 clear all; close all;
 maxepoch=10; Nn(2)=500; Nn(3)=500; Nn(4)=2000; 
 % converter; % converting Raw files into Matlab format
