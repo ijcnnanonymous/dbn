@@ -164,81 +164,227 @@ for ck = 1:1E9      % system clock cycles
     end;
     
     % Synapse Unit
+
+    % input
+      % RA(2,2,1:64)    : ymij output (from NU)
+      % RA(4,2,1:64)    : address of MW (from NU)
+      % RA(13,3,1:64)   : null connector indicator (from NU)
+      % R(18,2)         : e * prob (from SU)
+    % output: RA(12,2,1:64) : weighted input
+    
     x_in = RA(2,2,k);
-    x_in(RA(13,3,k)>0) = 0;
-    st = (x_in>=2);
-    r_y = x_in - st * 2;
-    if hS==3
-      RA(6,1,k) = st;
+    x_in(RA(13,3,k)>0) = 0; % set to zero if it is null connection
+    st = (x_in>=2);         % separate binary and 
+    r_y = x_in - st * 2;    % real states
+    if hS==3                % binary is used only in stage type 3
+      RA(6,1,k) = st;       %   according to Hinton's code
     else
       RA(6,1,k) = r_y;
     end;
-    RA(5,1,k) = MW(RA(4,2,k) + cS(10) + 1, k);
-    CA(1,1,k) = RA(5,2,k) .* RA(6,2,k);
-    RA(12,1,k) = CA(1,7,k);
-    Q(1, mod(ck + 130, 200) + 1, k) = RA(5,2,k);
-    Q(2, mod(ck + 118, 200) + 1, k)=r_y;
-    CA(2,1,k) = Q(2, mod(ck, 200) + 1, k) .* R(18,2);
+    RA(5,1,k) = MW(RA(4,2,k) + cS(10) + 1, k);  % read MW
+    CA(1,1,k) = RA(5,2,k) .* RA(6,2,k); % computed weighted input
+    RA(12,1,k) = CA(1,7,k);             % set the output register
+
+    Q(1, mod(ck + 130, 200) + 1, k) = RA(5,2,k);      % queue weight
+    Q(2, mod(ck + 118, 200) + 1, k)=r_y;              % real state
+    CA(2,1,k) = Q(2, mod(ck, 200) + 1, k) .* R(18,2); % prod = vi * hj
     RA(9,1,k) = CA(2,7,k);
-    if tS==2 && Csbe(127)
+    if tS==2 && Csbe(127)               % MD <-- prod in stage type 2
       MD(Csb(127) + 1, k) = CA(2,7,k);
     end;
-    RA(10,1,k) = MD(Csb(127) + 1, k);
-    CA(3,1,k) = RA(10,2,k) - RA(9,2,k);
-    CA(4,1,k) = Q(1,mod(ck, 200) + 1, k) + CA(3,7,k);
-    if tS==4 && Csbe(140)
+    RA(10,1,k) = MD(Csb(127) + 1, k);   % read MD
+    CA(3,1,k) = RA(10,2,k) - RA(9,2,k); % compute prod_pos - prod_neg
+    CA(4,1,k) = Q(1,mod(ck, 200) + 1, k) + CA(3,7,k); % add to weight
+    if tS==4 && Csbe(140)               % save in MW in stage type 4
       MW(Csb(140) + nS(10) + 1, k) = CA(4,7,k);
     end;
   end
   
   % Dendrite Unit
-  CA(5,1,32:63)=RA(12,2,(1:32)*2-1)+RA(12,2,(1:32)*2); % adder tree
-  CA(5,1,1:31)=CA(5,7,(1:31)*2)+CA(5,7,(1:31)*2+1);
-  C(1,1)=CA(5,7,1)+C(1,2)*(mod(Csb(47),bpn)~=0);
-  nre=(Csbe(52)&&mod(Csb(52),bpn)==bpn-1);nr=nr+(nre&&Csb(52)>bpn);
-  if nre net_sum=C(1,6);end;R(10,1)=net_sum;
+  
+  % input: RA(12,2,1:64) : weighted inputs from SNU
+  % output: R(10,2) : sum of weighted input
+  
+  % adder tree with P - 1 adders
+  CA(5,1,32:63) = RA(12,2,(1:32) * 2-1) + RA(12,2,(1:32) * 2);
+  CA(5,1,1:31) = CA(5,7,(1:31) * 2) + CA(5,7,(1:31) * 2 + 1);
+  % accumulator at the end of the tree
+  C(1,1) = CA(5,7,1) + C(1,2) * (mod(Csb(47),bpn)~=0);
+  % neuron index and enable are generated here
+  % note: relative timing of neuron index changes depending to bpn
+  nre = (Csbe(52) && mod(Csb(52),bpn)==bpn-1);
+  nr = nr + (nre&&Csb(52)>bpn);
+  if nre              % implement a latch
+    net_sum = C(1,6);
+  end;
+  R(10,1)=net_sum;
+  
   % Soma Unit
-  C(2,1)=R(10,2)+R(4,2);C(3,1)=-1*C(2,7);C(4,1)=exp(C(3,7));
-  C(5,1)=C(4,7)+1;C(6,1)=1/C(5,7);C(10,1)=ew*C(6,7);
-  R(17,1)=C(10,7);R(18,1)=R(17,33-nS(3));R(13,1)=C(6,7);
-  R(4,1)=MB(nr+bf+1);R(12,1)=R(4,2);In_n=nS(5);
-  if tS==2
-    R(16,1)=C(6,7);if Cnre(32)||Cnre(33) R(7,1)=1;end;
-    if Cnre(32) R(6,1)=Cnr(32)+bf;R(8,1)=C(6,7);end;
-    if Cnre(33) R(6,1)=Cnr(33)+nS(12);R(8,1)=R(16,2);end;
-    R(14,1)=floor(rand()*2^24);C(11,1)=R(14,2)/2^24;
-    C(12,1)=C(11,7)<=C(6,7);if Cnre(38) R(15,1)=C(12,7)*2+R(13,7);end;
-  elseif tS==3 || tS==4
-    R(11,1)=C(6,7);R(5,1)=MA(Cnr(32)+bf+1);C(7,1)=R(5,2)-R(11,2);
-    if tS==3&&Cnre(33) er=er+(R(5,2)-R(11,2))^2;end;
-    C(13,1)=C(7,7)*eb;C(9,1)=R(12,44)+C(13,7);
-    if Cnre(51) MB(Cnr(51)+bf+1)=C(9,7);end;
+  
+  % input
+    % R(10,2) :   sum of weighted input (from DU)
+    % B       :   training data (external) one neuron at a time
+  % output
+    % R(18,2) : e * prob
+    % R(3,2)  : new neuron output
+
+  % implement sigmoid function 1/(1+e(-x)) and compute prob
+  C(2,1) = R(10,2) + R(4,2);
+  C(3,1) = -1 * C(2,7);
+  C(4,1) = exp(C(3,7));
+  C(5,1) = C(4,7) + 1;
+  C(6,1) = 1 / C(5,7);
+  R(11,1) = C(6,7);         % the output of sigmoid function
+
+  C(10,1) = ew * C(6,7);    % prod = e * prob
+  R(17,1) = C(10,7);        % put prod in queue 
+  R(18,1) = R(17, 33 - nS(3)); %   to synchronize with SNU
+  
+  R(4,1) = MB(nr + bf + 1); % read bias from MB
+  R(12,1) = R(4,2);         % feed back for update bias
+  In_n = nS(5);             % set the number of training data.
+  if tS==2                  % in stage type 2
+    % bias computation part
+    % R(6,1), R(7,1), R(8,1) serve as a gateway to MA
+    if Cnre(32) || Cnre(33) % prob is stored in two places of MA:
+      R(7,1) = 1;      % for hpos, vpos of current and next layer
+    end;               
+    if Cnre(32)        % in the first slot store with offset of MB
+      R(6,1) = Cnr(32) + bf;
+      R(8,1) = C(6,7);
+    end;
+    if Cnre(33)        % in the second slot store with offset of MA
+      R(6,1) = Cnr(33) + nS(12);
+      R(8,1) = R(11,2);
+    end;
+    % random number generator
+    R(14,1) = floor(rand() * 2^24); % simulate 24bit LFSR
+    C(11,1) = R(14,2) / 2^24;
+    C(12,1) = C(11,7)<=C(6,7); % compute binary state
+    if Cnre(38)          % pack binary state and real data
+      R(15,1) = C(12,7) * 2 + R(11,7);  % set new neuron state
+    end;
+  elseif tS==3 || tS==4  % compute biases in stage types 3 and 4
+    R(5,1) = MA(Cnr(32) + bf + 1);  % read MA
+    C(7,1) = R(5,2) - R(11,2);      % state difference
+    if tS==3 && Cnre(33)            % accumulate square error
+      er = er + (R(5,2) - R(11,2))^2;
+    end;
+    C(13,1) = C(7,7) * eb;        % apply learning rate
+    C(9,1) = R(12,44) + C(13,7);  % add to previous biahn
+    if Cnre(51) 
+      MB(Cnr(51)+bf+1) = C(9,7);  % save in MB
+    end;
+    R(15,1) = R(11,7);            % set new neuron state
   end
-  if tS~=2 R(15,1)=R(13,7);end;
-  if In_n==0&&tS~=4 R(1,1)=Cnre(39);R(2,1)=Cnr(39);R(3,1)=R(15,2);end;
-  if In_n>0&&dpi<In_n&&~R(1,1) % inject train data input
-    if dpi+1>=In_n if tS==1 eos=1;end;I=reshape(MA(1:784),28,28);
-      figure(1),subplot(2,2,1),imshow(I),title('V1-pos');end;
-    dpi=dpi+1;R(1,1)=1;
-    R(2,1)=dpi-1;R(3,1)=B(dpi);R(7,1)=1;R(6,1)=dpi-1;R(8,1)=B(dpi);
+  if In_n==0 && tS~=4   % write new state on MX if not input mode
+    R(1,1) = Cnre(39);
+    R(2,1) = Cnr(39);
+    R(3,1) = R(15,2);
+  end;
+
+  % read training data
+  if In_n>0 && dpi<In_n && ~R(1,1)  % inject train data input
+    if dpi+1>=In_n                  % if all inputs are read
+      if tS==1                      % end stage if stage type 1
+        eos = 1;
+      end;
+      I = reshape(MA(1:784),28,28); % display new training data;
+      figure(1), subplot(2,2,1), imshow(I), title('V1-pos');
+      drawnow();
+    end;
+    dpi = dpi + 1;                  % point to input
+    R(1,1) = 1;                     % write data in MX
+    R(2,1) = dpi - 1;
+    R(3,1) = B(dpi);
+    R(7,1) = 1;                     % write data in MA
+    R(6,1) = dpi - 1;
+    R(8,1) = B(dpi);
   end
-  if Cnr(39)==nS(2)-1&&cp==np eos=1;end;
-  if eos  % Control Unit
-    if np==3 I=reshape(MX((1:784)+nS(8),1),28,28);
-      subplot(2,2,2),imshow(I),title('V1-neg');end;
-    if np>4&&hS==2 I=reshape(MX((1:nS(2))+nS(8)),25,floor(nS(2)/25));
-      subplot(2,2,floor((np-2)/3)+2),imshow(I),title('H2-H3');end;
-    if hS==4 fprintf('(Err=%6.1f)\t',er);er=0;end; cp=cp+1;cS=SOT(cp,:);
-    if cS(1)==9 cp=cS(2);cS=SOT(cp,:);disp(di);end;
-    if cS(5)>0 if di>=Nc*Nb di=1;else di=di+1;end; dpi=0;
-      B=DB(mod(di,Nc)+1,:,floor((di-1)/Nc)+1);end;
-    fprintf('%2d ',cp);sb=0;sbe=1;nr=0;nre=0;eos=0;dcnt=0;
-  else if sb+1>=cS(4)||hS==1 sbe=0;else sb=sb+1;end;end;
-  dcnt=dcnt+1;if dcnt==50 np=cp;nS=cS;end;
-  if R(7,2) MA(R(6,2)+1)=R(8,2);end;lr=[12,13,17];
-  if R(1,2) MX(R(2,2)+nS(8)+1,:)=R(3,2);end;t=2:150;f=1:149;
-  Csb(t)=Csb(f);Csbe(t)=Csbe(f);Csb(1)=sb;Csbe(1)=sbe;Cnr(t)=Cnr(f);
-  Cnre(t)=Cnre(f);Cnr(1)=nr;Cnre(1)=nre;R(lr,6:60)=R(lr,5:59);
-  R(:,2:7)=R(:,1:6);R(:,1)=0;RA(:,2:7,:)=RA(:,1:6,:);RA(:,1,:)=0;
-  C(:,2:7)=C(:,1:6);C(:,1)=0;CA(:,2:7,:)=CA(:,1:6,:);CA(:,1,:)=0;
+  
+  if Cnr(39)==nS(2)-1 && cp==np     % end stage if all neurons done
+    eos = 1;
+  end;
+
+  % Control Unit
+  
+  if eos  % end stage and set for the next stage
+    if np==3  % draw image from first layer negative visible
+      I = reshape(MX((1:784)+nS(8),1),28,28);   % get image
+      subplot(2,2,2), imshow(I), title('V1-neg');
+      drawnow();
+    end;
+    if np>4 && hS==2 % draw image from layer 2 and 3 of hidden
+      I = reshape(MX((1:nS(2))+nS(8)),25,floor(nS(2)/25));
+      subplot(2,2,floor((np-2)/3)+2),imshow(I),title('H2-H3');
+      drawnow();
+    end;
+    if hS==4        % print error
+      fprintf('(Err=%6.1f)\t',er);
+      er = 0;
+    end;
+    cp = cp + 1;    % change to next stage (tail part remains unchanged)
+    cS = SOT(cp,:); % set current record of SOT
+    if cS(1)==9     % handle goto statement
+      cp = cS(2);
+      cS = SOT(cp,:);
+      disp(di);     % print training sample number at the end of line
+    end;
+    if cS(5)>0      % if new stage has training data to read
+      if di>=Nc * Nb    % advance pointer to the training data
+        di = 1;
+      else
+        di = di + 1;
+      end;
+      dpi = 0;
+      B = DB(mod(di,Nc)+1,:,floor((di-1)/Nc)+1); % shortcut
+    end;
+    fprintf('%2d ',cp);
+    sb = 0;     % reset control registers
+    sbe = 1;
+    nr = 0;
+    nre = 0;
+    eos = 0;
+    dcnt = 0;   % start tail-change delay
+  % if not end of stage
+  else
+    if sb + 1>=cS(4) || hS==1 % reset enable if all SB index processed
+      sbe = 0;
+    else
+      sb = sb + 1;
+    end;
+  end;
+  dcnt = dcnt + 1;    % run tail-change delay counter
+  if dcnt==50         % if counter is reached, set tail = head 
+    np = cp;
+    nS = cS;
+  end;
+  if R(7,2)           % gateway to MA memory
+    MA(R(6,2)+1) = R(8,2);
+  end;
+  lr=[12,13,17];      % long registers
+  if R(1,2)           % gateway to write ports of MX memory
+    MX(R(2,2)+nS(8)+1,:) = R(3,2);
+  end;
+  t = 2:150; f = 1:149;   % shortcuts
+  % shift control registers
+  Csb(t) = Csb(f);
+  Csbe(t) = Csbe(f);
+  Csb(1) = sb;
+  Csbe(1) = sbe;
+  Cnr(t) = Cnr(f);
+  Cnre(t) = Cnre(f);
+  Cnr(1) = nr;
+  Cnre(1) = nre;
+  % shift registers
+  R(lr,6:60) = R(lr,5:59);
+  R(:,2:7) = R(:,1:6);
+  R(:,1) = 0;
+  RA(:,2:7,:) = RA(:,1:6,:);
+  RA(:,1,:) = 0;
+  % shift pipelined arithmetic operators
+  C(:,2:7) = C(:,1:6);
+  C(:,1) = 0;
+  CA(:,2:7,:) = CA(:,1:6,:);
+  CA(:,1,:) = 0;
 end
