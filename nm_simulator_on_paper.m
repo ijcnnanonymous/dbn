@@ -90,16 +90,16 @@ for ck=1:1E9     % clock cycles
   if In_n==0&&tS~=4 R(1,1)=Cnre(39);R(2,1)=Cnr(39);R(3,1)=R(15,2);end;
   if In_n>0&&dpi<In_n&&~R(1,1) % inject train data input
     if dpi+1>=In_n if tS==1 eos=1;end;I=reshape(MA(1:784),28,28);
-      figure(1),subplot(2,2,1),imshow(I),title('V1-pos');end;
+      figure(1),subplot(2,2,1),imshow(I),title('V1-pos');drawnow();end;
     dpi=dpi+1;R(1,1)=1;
     R(2,1)=dpi-1;R(3,1)=B(dpi);R(7,1)=1;R(6,1)=dpi-1;R(8,1)=B(dpi);
   end
   if Cnr(39)==nS(2)-1&&cp==np eos=1;end;
   if eos  % Control Unit
     if np==3 I=reshape(MX((1:784)+nS(8),1),28,28);
-      subplot(2,2,2),imshow(I),title('V1-neg');end;
+      subplot(2,2,2),imshow(I),title('V1-neg');drawnow();end;
     if np>4&&hS==2 I=reshape(MX((1:nS(2))+nS(8)),25,floor(nS(2)/25));
-      subplot(2,2,floor((np-2)/3)+2),imshow(I),title('H2-H3');end;
+      subplot(2,2,floor((np-2)/3)+2),imshow(I),title('H2-H3');drawnow();end;
     if hS==4 fprintf('(Err=%6.1f)\t',er);er=0;end; cp=cp+1;cS=SOT(cp,:);
     if cS(1)==9 cp=cS(2);cS=SOT(cp,:);disp(di);end;
     if cS(5)>0 if di>=Nc*Nb di=1;else di=di+1;end; dpi=0;

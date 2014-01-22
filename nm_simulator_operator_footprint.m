@@ -15,8 +15,27 @@
 % 
 clear all; close all;
 maxepoch=10; Nn(2)=500; Nn(3)=500; Nn(4)=2000; 
-% converter; % converting Raw files into Matlab format
-makebatches; % needs converter.m, makebatches.m from [], MNIST files []
+
+% Use characters from an image stored in MATLAB as training data.
+%   characters: A,Z,E,R,G,U,R,E,S
+
+I=imadjust(imresize(rgb2gray(imread('blason.jpg')),1.15),[0 0.8],[]);
+I=1-(double(I)/255);    % convert to real format
+I3=I(51:78,71:98+28*7); % saparate digites
+for i = 0:7
+  batchdata(i+1,:,1) = reshape(I3(:,(1:28)+28*i-i+(i>4)*4),1,[]);
+end;
+
+% This code was originally designed for MNIST handwritten database.
+% To change the training data, disable lines above,
+%   and enable lines below.
+% In this case, you need converter.m, makebatches.m, and MNIST files
+%   from http://www.cs.toronto.edu/~hinton/MatlabForSciencePaper.html.
+
+% converter;    % convert MNIST tiles to MATLAB form
+% makebatches;  % build batch
+
+
 [Nc Nn(1) Nb]=size(batchdata);
 % Initializing symmetric weights
 vishid = 0.1*randn(2000,2000);  % same weights for all layer (for debug)
